@@ -12,6 +12,7 @@ struct Shape {
     position: Coordinate,
     color:    Pixel,
     kind:     ShapeKind,
+    speed: u8,
 }
 
 #[derive(Copy, Clone)]
@@ -94,7 +95,8 @@ impl Program for Game {
             player: Shape{
                 position: Coordinate{x: 127, y: (DISPLAY_ROWS - 5) as u8},
                 color: Pixel{red: 255, green: 0, blue: 125},
-                kind: ShapeKind::Rect {width: 10, height: 10}
+                kind: ShapeKind::Rect {width: 10, height: 10},
+                speed: 1
             },
             buttons_state: HashMap::new(),
             asteroids: Vec::new(),
@@ -120,7 +122,10 @@ impl Program for Game {
             self.player.position.x = self.player.position.x.saturating_add(3);
         }
         for asteroid in self.asteroids.iter_mut() {
-            asteroid.position.y = asteroid.position.y.saturating_add(1);
+            // asteroids move towards us
+            asteroid.position.y = asteroid.position.y.saturating_add(asteroid.speed);
+
+            // background gets darker with each collission
             if asteroid.collides(&self.player) {
                 self.collisions_count += 1;
                 self.background_color.green = self.background_color.green.saturating_sub(1);
@@ -131,6 +136,7 @@ impl Program for Game {
 
         if self.asteroids.len() < TARGET_ASTEROID_COUNT {
             self.asteroids.push(Shape{
+                speed: rand::thread_rng().gen_range(1, 5),
                 position: Coordinate{x: random() , y:0},
                 color: Pixel{red: random(), green: random(), blue: 0},
                 kind: ShapeKind::Rect {width: 4, height: 4}
