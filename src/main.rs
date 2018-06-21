@@ -115,6 +115,12 @@ impl Program for Game {
                 _ => {}
             }
         }
+        if self.pressed(Button::Down) {
+            self.player.position.y = self.player.position.y.saturating_add(3);
+        }
+        if self.pressed(Button::Up) {
+            self.player.position.y = self.player.position.y.saturating_sub(3);
+        }
         if self.pressed(Button::Left) {
             self.player.position.x = self.player.position.x.saturating_sub(3);
         }
