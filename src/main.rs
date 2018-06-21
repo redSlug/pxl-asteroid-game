@@ -73,6 +73,7 @@ impl Coordinate {
 }
 
 struct Game {
+    background_color: Pixel,
     player: Shape,
     buttons_state: HashMap<Button, ButtonState>,
     asteroids: Vec<Shape>,
@@ -89,6 +90,7 @@ impl Game {
 impl Program for Game {
     fn new() -> Game {
         Game {
+            background_color: Pixel{red: 255, green: 255, blue: 255},
             player: Shape{
                 position: Coordinate{x: 127, y: (DISPLAY_ROWS - 5) as u8},
                 color: Pixel{red: 255, green: 0, blue: 125},
@@ -125,8 +127,7 @@ impl Program for Game {
             }
         }
 
-        if self.asteroids.len() < TARGET_ASTEROID_COUNT + self.collisions_count &&
-            self.asteroids.len() < MAX_ASTEROID_COUNT {
+        if self.asteroids.len() < TARGET_ASTEROID_COUNT {
             self.asteroids.push(Shape{
                 position: Coordinate{x: random() , y:0},
                 color: Pixel{red: random(), green: random(), blue: 0},
@@ -141,7 +142,7 @@ impl Program for Game {
     fn render(&mut self, pixels: &mut [Pixel]) {
         // board
         for p in pixels.iter_mut() {
-            *p = Pixel { red: 100, green: 100, blue: 255 };
+            *p = self.background_color;
         }
 
         // player
