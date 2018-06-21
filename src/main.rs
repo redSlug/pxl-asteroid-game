@@ -123,7 +123,9 @@ impl Program for Game {
             asteroid.position.y = asteroid.position.y.saturating_add(1);
             if asteroid.collides(&self.player) {
                 self.collisions_count += 1;
-                self.player.color.green = self.player.color.green.saturating_add(self.collisions_count as u8);
+                self.background_color.green = self.background_color.green.saturating_sub(1);
+                self.background_color.red = self.background_color.red.saturating_sub(1);
+                self.background_color.blue = self.background_color.blue.saturating_sub(1);
             }
         }
 
