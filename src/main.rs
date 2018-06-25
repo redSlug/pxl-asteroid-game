@@ -151,6 +151,9 @@ impl Program for Game {
                 continue;
             }
 
+            if asteroid.position.y < asteroid.speed {
+                asteroid.is_alive = true;
+            }
             // asteroids move towards us
             asteroid.position.y = asteroid.position.y.saturating_add(asteroid.speed);
 
