@@ -8,6 +8,17 @@ use rand::prelude::*;
 const TARGET_ASTEROID_COUNT: u32 = 8;
 const MAX_ASTEROID_COUNT: u32 = 64;
 
+struct Entity {
+    shape: Shape,
+    kind: EntityKind,
+}
+
+enum EntityKind {
+    Mushroom,
+    Crystal,
+}
+
+
 struct Shape {
     position: Coordinate,
     color:    Pixel,
@@ -84,8 +95,12 @@ struct Game {
     game_timer: u32,
     lives: u8,
     player: Shape,
+    rest_until: Option<u32>,
     buttons_state: HashMap<Button, ButtonState>,
+    // TODO maybe combine these two into one vector
     asteroids: Vec<Shape>,
+    mushrooms: Vec<Entity>,
+    crystals: Vec<Entity>,
     collisions_count: u32
 }
 
@@ -110,8 +125,11 @@ impl Program for Game {
                 speed: 1,
                 is_alive: true
             },
+            rest_until: None,
             buttons_state: HashMap::new(),
             asteroids: Vec::new(),
+            mushrooms: Vec::new(),
+            crystals: Vec:: new(),
             collisions_count: 0
         }
     }
@@ -120,11 +138,21 @@ impl Program for Game {
     }
     fn tick(&mut self, events: &[Event]) {
         if self.lives == 0 {
-            self.game_title = format!("Game over! Your score was:{} ", (self.game_timer / 60).to_string());
+            self.game_title = format!("Game over! Score:{} ", (self.game_timer / 60).to_string());
             return
         }
         self.game_title = format!("Asteroids! Score:{} Lives:{}", (self.game_timer / 60).to_string(), self.lives);
         self.game_timer += 1;
+
+        let resting = match self.rest_until {
+            Some(rest_until) => if rest_until > self.game_timer {
+                true
+            } else {
+                self.rest_until = None;
+                false
+            },
+            None => false
+        };
 
         for event in events {
             match event {
@@ -146,6 +174,30 @@ impl Program for Game {
         if self.pressed(Button::Right) {
             self.player.position.x = self.player.position.x.saturating_add(3);
         }
+        for mushroom in self.mushrooms.iter_mut() {
+            if !mushroom.shape.is_alive{
+                continue;
+            }
+            if mushroom.shape.collides(&self.player) {
+                self.lives += 1;
+                mushroom.shape.is_alive = false;
+            }
+        }
+
+        for crystal in self.crystals.iter_mut() {
+            if !crystal.shape.is_alive{
+                continue;
+            }
+            if crystal.shape.collides(&self.player) {
+                self.rest_until = Some(self.game_timer + 180);
+                // Remove all asteroids
+                for asteroid in self.asteroids.iter_mut() {
+                    asteroid.is_alive = false;
+                }
+                crystal.shape.is_alive = false;
+            }
+        }
+
         for asteroid in self.asteroids.iter_mut() {
             if !asteroid.is_alive {
                 continue;
@@ -173,8 +225,33 @@ impl Program for Game {
             }
         }
 
-        let additional_asteroids = self.game_timer / 100;
-        if self.asteroids.len() < (TARGET_ASTEROID_COUNT + additional_asteroids) as usize {
+        // add a new mushroom
+        if self.game_timer % rand::thread_rng().gen_range(1000, 1200) == 0{
+            let shape = Shape{
+                speed: 0,
+                position: Coordinate{x: random() , y: random()},
+                color: Pixel{red: 165, green: 83, blue: 19},
+                kind: ShapeKind::Rect {width: 16, height: 4},
+                is_alive: true
+            };
+            self.mushrooms.push(Entity{shape, kind: EntityKind::Mushroom})
+        }
+
+
+        // add a new crystal
+        if self.game_timer % 1200 == 0{
+            let shape = Shape{
+                speed: 0,
+                position: Coordinate{x: random() , y: random()},
+                color: Pixel{red: 104, green: 255, blue: 252},
+                kind: ShapeKind::Rect {width: 17, height: 17}, // TODO maybe give them random sizes
+                is_alive: true
+            };
+            self.crystals.push(Entity{shape, kind: EntityKind::Crystal})
+        }
+
+        let additional_asteroids = self.game_timer / 700;
+        if self.asteroids.len() < (TARGET_ASTEROID_COUNT + additional_asteroids) as usize  && !resting {
             self.asteroids.push(Shape{
                 speed: rand::thread_rng().gen_range(1, 5),
                 position: Coordinate{x: random() , y:0},
@@ -186,6 +263,8 @@ impl Program for Game {
 
         // clean out asteroids
         self.asteroids.retain(|asteroid|asteroid.position.y < 255 && asteroid.is_alive);
+        self.mushrooms.retain(|mushroom|mushroom.shape.position.y < 255 && mushroom.shape.is_alive);
+        self.crystals.retain(|crystal|crystal.shape.position.y < 255 && crystal.shape.is_alive);
 
     }
     fn render(&mut self, pixels: &mut [Pixel]) {
@@ -203,6 +282,21 @@ impl Program for Game {
                 asteroid.draw(pixels);
             }
         }
+
+        // mushroom
+        for mushroom in &self.mushrooms {
+            if mushroom.shape.is_alive {
+                mushroom.shape.draw(pixels);
+            }
+        }
+
+        // mushroom
+        for crystal in &self.crystals {
+            if crystal.shape.is_alive {
+                crystal.shape.draw(pixels);
+            }
+        }
+
     }
 }
 
