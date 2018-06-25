@@ -5,8 +5,8 @@ use pxl::*;
 use std::collections::HashMap;
 use rand::prelude::*;
 
-const TARGET_ASTEROID_COUNT: usize = 8;
-const MAX_ASTEROID_COUNT: usize = 64;
+const TARGET_ASTEROID_COUNT: u32 = 8;
+const MAX_ASTEROID_COUNT: u32 = 64;
 
 struct Shape {
     position: Coordinate,
@@ -27,10 +27,14 @@ impl Shape {
 
         match (self.kind, other.kind) {
             (Rect{width, height}, Rect{width: other_width, height: other_height}) => {
-                return self.position.x < other.position.x.saturating_add(other_width) &&
-                    self.position.x.saturating_add(width) > other.position.x &&
-                    self.position.y < other.position.y.saturating_add(other_height) &&
-                    height.saturating_add(self.position.y) > other.position.y
+                let self_x= self.position.x.saturating_sub(width / 2);
+                let self_y= self.position.y.saturating_sub(height / 2);
+                let other_x= other.position.x.saturating_sub(other_width / 2);
+                let other_y= other.position.y.saturating_sub(other_height / 2);
+                return self_x < other_x.saturating_add(other_width) &&
+                    self_x.saturating_add(width) > other_x &&
+                    self_y < other_y.saturating_add(other_height) &&
+                    height.saturating_add(self_y) > other_y
             }
         }
     }
@@ -42,7 +46,7 @@ impl Shape {
                 let y = self.position.y as i32;
                 for dy in 0..height as i32 {
                     for dx in 0..width as i32{
-                        if let Some(coordinate) = self.position.add_delta(dx - height as i32 / 2, dy - width as i32 / 2) {
+                        if let Some(coordinate) = self.position.add_delta(dx - width as i32 / 2, dy - height as i32 / 2) {
                             pixels[coordinate.pixel_index()] = self.color;
                         }
                     }
@@ -76,10 +80,13 @@ impl Coordinate {
 
 struct Game {
     background_color: Pixel,
+    game_title: String,
+    game_timer: u32,
+    lives: u8,
     player: Shape,
     buttons_state: HashMap<Button, ButtonState>,
     asteroids: Vec<Shape>,
-    collisions_count: usize
+    collisions_count: u32
 }
 
 
@@ -93,12 +100,15 @@ impl Program for Game {
     fn new() -> Game {
         Game {
             background_color: Pixel{red: 255, green: 255, blue: 255},
+            game_timer: 0,
+            lives: 8,
+            game_title: String::new(),
             player: Shape{
                 position: Coordinate{x: 127, y: (DISPLAY_ROWS - 5) as u8},
                 color: Pixel{red: 255, green: 0, blue: 125},
                 kind: ShapeKind::Rect {width: 10, height: 10},
                 speed: 1,
-                is_alive: true,
+                is_alive: true
             },
             buttons_state: HashMap::new(),
             asteroids: Vec::new(),
@@ -106,9 +116,16 @@ impl Program for Game {
         }
     }
     fn title(&self) -> &str {
-        "asteroid game!"
+        &self.game_title.as_str()
     }
     fn tick(&mut self, events: &[Event]) {
+        if self.lives == 0 {
+            self.game_title = format!("Game over! Your score was:{} ", (self.game_timer / 60).to_string());
+            return
+        }
+        self.game_title = format!("Asteroids! Score:{} Lives:{}", (self.game_timer / 60).to_string(), self.lives);
+        self.game_timer += 1;
+
         for event in events {
             match event {
                 Event::Button {button, state} => {
@@ -140,16 +157,21 @@ impl Program for Game {
             // background gets darker with each colission
             if asteroid.collides(&self.player) {
                 self.collisions_count += 1;
-                self.background_color.green = self.background_color.green.saturating_sub(1);
-                self.background_color.red = self.background_color.red.saturating_sub(1);
-                self.background_color.blue = self.background_color.blue.saturating_sub(1);
+                self.background_color.green = self.background_color.green.saturating_sub(10);
+                self.background_color.red = self.background_color.red.saturating_sub(10);
+                self.background_color.blue = self.background_color.blue.saturating_sub(10);
 
                 // remove asteroid from vec
                 asteroid.is_alive = false;
+
+                // subtract life
+                self.lives = self.lives.saturating_sub(1);
+                // TODO if lives as zero do something
             }
         }
 
-        if self.asteroids.len() < TARGET_ASTEROID_COUNT {
+        let additional_asteroids = self.game_timer / 100;
+        if self.asteroids.len() < (TARGET_ASTEROID_COUNT + additional_asteroids) as usize {
             self.asteroids.push(Shape{
                 speed: rand::thread_rng().gen_range(1, 5),
                 position: Coordinate{x: random() , y:0},
@@ -158,9 +180,9 @@ impl Program for Game {
                 is_alive: true
             })
         }
-        
+
         // clean out asteroids
-        self.asteroids.retain(|asteroid|asteroid.position.y < 255);
+        self.asteroids.retain(|asteroid|asteroid.position.y < 255 && asteroid.is_alive);
 
     }
     fn render(&mut self, pixels: &mut [Pixel]) {
