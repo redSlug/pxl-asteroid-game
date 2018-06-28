@@ -319,14 +319,41 @@ impl Program for Game {
     }
 }
 
+struct Voice {
+    volume: f32,
+    kind: VoiceKind,
+    end_time: f64,
+}
+
+impl Voice {
+    fn sample(&mut, time: f64) -> Sample {
+        unimplemented!();
+    }
+}
+
+enum VoiceKind {
+    Sin, // sine wave // like original NES synth, fixed body of 6 voices
+    Square, // square wave
+    Sawtooth, // sawtooth wave
+    Noise, // white noise (random values between -1 and 1)
+}
+
 struct Audio {
     current_time: f64,
-    end_time: f64
+    end_time: f64,
+    voices: Vec<Voice>,
 }
 
 impl Audio {
     fn new() -> Audio {
-        Audio{current_time: 0.0, end_time: 0.0}
+        Audio{current_time: 0.0, end_time: 0.0, voices: Vec::new()}
+    }
+
+    // in game:
+    // audio.lock().unwrap().play(0.5, 0.25, VoiceKind::Sin);
+
+    fn play(&mut self, duration: f64, volume: f64, kind: VoiceKind) {
+        self.voices.push(Voice{volume, kind, end_time: self.curent_time + duration});
     }
 
     fn beep(&mut self, duration: f64){
@@ -340,6 +367,13 @@ impl Synthesizer for Audio {
     // samples_played as f64 / SAMPLES_PER_SECOND as f64 -> seconds passed
 
     fn synthesize(&mut self, samples_played: u64, samples: &mut [Sample]) {
+
+
+        // Polyphonic synthesizer
+
+        // go over voices, find the active voices that are still playing (t < voice.end_time)
+        // for all active voices, add the voice's sample to the output sample
+
         // write a value to every every sample in the sample buffer
 
         let mut t = samples_played as f64 / SAMPLES_PER_SECOND as f64;
@@ -351,7 +385,7 @@ impl Synthesizer for Audio {
             let volume = 0.5;
             if t < self.end_time {
                 let amplitude_of_waveform = (radians * frequency).sin() as f32 * volume; // -1 to 1
-                s.left = amplitude_of_waveform;
+                s.left = amplitude_of_waveform; // becomes a big number if there are many voices
                 s.right = amplitude_of_waveform;
             } else {
                 s.left = 0.0;
@@ -361,6 +395,9 @@ impl Synthesizer for Audio {
             t += 1.0 / SAMPLES_PER_SECOND as f64;
 
         }
+
+        // remove all voices that are done playing, i.e t >= voice.end_time using retain
+
         self.current_time = t;
     }
 }
