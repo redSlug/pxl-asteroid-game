@@ -4,5 +4,5 @@ version = "0.1.0"
 authors = ["Bradley Dettmer <11279144+redSlug@users.noreply.github.com>", "Casey Rodarmor <casey@rodarmor.com>"]
 
 [dependencies]
-pxl	= "0.0.4"
+pxl	= "0.0.9"
 rand = "0.5.0"

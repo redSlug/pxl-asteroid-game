@@ -6,16 +6,21 @@ use std::collections::HashMap;
 use rand::prelude::*;
 
 const TARGET_ASTEROID_COUNT: u32 = 8;
-const MAX_ASTEROID_COUNT: u32 = 64;
+const SCREEN_SIZE: usize = 256;
+
+fn clamp(n: f32) -> f32 {
+    if n < 0.0 {
+        0.0
+    } else if n > 1.0 {
+        1.0
+    } else {
+        n
+    }
+}
+
 
 struct Entity {
     shape: Shape,
-    kind: EntityKind,
-}
-
-enum EntityKind {
-    Mushroom,
-    Crystal,
 }
 
 
@@ -53,8 +58,6 @@ impl Shape {
     fn draw(&self, pixels: &mut [Pixel]) {
         match self.kind {
             ShapeKind::Rect{width, height} => {
-                let x = self.position.x as i32;
-                let y = self.position.y as i32;
                 for dy in 0..height as i32 {
                     for dx in 0..width as i32{
                         if let Some(coordinate) = self.position.add_delta(dx - width as i32 / 2, dy - height as i32 / 2) {
@@ -75,13 +78,13 @@ struct Coordinate {
 
 impl Coordinate {
     fn pixel_index(self) -> usize {
-        self.y as usize * DISPLAY_COLUMNS as usize + self.x as usize
+        self.y as usize * SCREEN_SIZE as usize + self.x as usize
     }
 
     fn add_delta(self, x: i32, y: i32) -> Option<Coordinate>{
         let new_x = self.x as i32 + x;
         let new_y = self.y as i32 + y;
-        if new_x < 0 || new_x >= DISPLAY_COLUMNS as i32 || new_y < 0 || new_y >= DISPLAY_ROWS as i32 {
+        if new_x < 0 || new_x >= SCREEN_SIZE as i32 || new_y < 0 || new_y >= SCREEN_SIZE as i32 {
             None
         } else {
             Some(Coordinate{x: new_x as u8, y: new_y as u8})
@@ -112,15 +115,19 @@ impl Game {
 }
 
 impl Program for Game {
+    fn dimensions(&self) -> (usize, usize){
+        (SCREEN_SIZE, SCREEN_SIZE)
+    }
+    
     fn new() -> Game {
         Game {
-            background_color: Pixel{red: 255, green: 255, blue: 255},
+            background_color: Pixel{alpha: 1.0, red: 1.0, green: 1.0, blue: 1.0},
             game_timer: 0,
             lives: 8,
             game_title: String::new(),
             player: Shape{
-                position: Coordinate{x: 127, y: (DISPLAY_ROWS - 5) as u8},
-                color: Pixel{red: 255, green: 0, blue: 125},
+                position: Coordinate{x: 127, y: (SCREEN_SIZE - 5) as u8},
+                color: Pixel{alpha: 1.0, red: 1.0, green: 0.0, blue: 0.5},
                 kind: ShapeKind::Rect {width: 10, height: 10},
                 speed: 1,
                 is_alive: true
@@ -212,9 +219,9 @@ impl Program for Game {
             // background gets darker with each colission
             if asteroid.collides(&self.player) {
                 self.collisions_count += 1;
-                self.background_color.green = self.background_color.green.saturating_sub(10);
-                self.background_color.red = self.background_color.red.saturating_sub(10);
-                self.background_color.blue = self.background_color.blue.saturating_sub(10);
+                self.background_color.green = clamp(self.background_color.green - 0.04);
+                self.background_color.red = clamp(self.background_color.red - 0.04);
+                self.background_color.blue = clamp(self.background_color.blue - 0.04);
 
                 // remove asteroid from vec
                 asteroid.is_alive = false;
@@ -230,11 +237,11 @@ impl Program for Game {
             let shape = Shape{
                 speed: 0,
                 position: Coordinate{x: random() , y: random()},
-                color: Pixel{red: 165, green: 83, blue: 19},
+                color: Pixel{alpha: 1.0, red: 0.65, green: 0.33, blue: 0.07},
                 kind: ShapeKind::Rect {width: 16, height: 4},
                 is_alive: true
             };
-            self.mushrooms.push(Entity{shape, kind: EntityKind::Mushroom})
+            self.mushrooms.push(Entity{shape})
         }
 
 
@@ -243,11 +250,11 @@ impl Program for Game {
             let shape = Shape{
                 speed: 0,
                 position: Coordinate{x: random() , y: random()},
-                color: Pixel{red: 104, green: 255, blue: 252},
+                color: Pixel{alpha: 1.0, red: 0.41, green: 1.0, blue: 0.99},
                 kind: ShapeKind::Rect {width: 17, height: 17}, // TODO maybe give them random sizes
                 is_alive: true
             };
-            self.crystals.push(Entity{shape, kind: EntityKind::Crystal})
+            self.crystals.push(Entity{shape})
         }
 
         let additional_asteroids = self.game_timer / 700;
@@ -255,7 +262,7 @@ impl Program for Game {
             self.asteroids.push(Shape{
                 speed: rand::thread_rng().gen_range(1, 5),
                 position: Coordinate{x: random() , y:0},
-                color: Pixel{red: random(), green: random(), blue: 0},
+                color: Pixel{alpha: 1.0, red: random(), green: random(), blue: 0.0},
                 kind: ShapeKind::Rect {width: 4, height: 4},
                 is_alive: true
             })
