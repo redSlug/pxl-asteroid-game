@@ -3,7 +3,11 @@ extern crate rand;
 
 use pxl::*;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::f64::consts::PI;
 use rand::prelude::*;
+
+
 
 const TARGET_ASTEROID_COUNT: u32 = 8;
 const SCREEN_SIZE: usize = 256;
@@ -104,7 +108,8 @@ struct Game {
     asteroids: Vec<Shape>,
     mushrooms: Vec<Entity>,
     crystals: Vec<Entity>,
-    collisions_count: u32
+    collisions_count: u32,
+    audio: Arc<Mutex<Audio>>,
 }
 
 
@@ -115,6 +120,10 @@ impl Game {
 }
 
 impl Program for Game {
+    fn synthesizer(&self) -> Option<Arc<Mutex<Synthesizer>>> {
+        Some(self.audio.clone())
+    }
+
     fn dimensions(&self) -> (usize, usize){
         (SCREEN_SIZE, SCREEN_SIZE)
     }
@@ -137,7 +146,8 @@ impl Program for Game {
             asteroids: Vec::new(),
             mushrooms: Vec::new(),
             crystals: Vec:: new(),
-            collisions_count: 0
+            collisions_count: 0,
+            audio: Arc::new(Mutex::new(Audio::new())),
         }
     }
     fn title(&self) -> &str {
@@ -187,6 +197,7 @@ impl Program for Game {
             }
             if mushroom.shape.collides(&self.player) {
                 self.lives += 1;
+                self.audio.lock().unwrap().beep(0.5);
                 mushroom.shape.is_alive = false;
             }
         }
@@ -218,6 +229,7 @@ impl Program for Game {
 
             // background gets darker with each colission
             if asteroid.collides(&self.player) {
+                self.audio.lock().unwrap().beep(0.1);
                 self.collisions_count += 1;
                 self.background_color.green = clamp(self.background_color.green - 0.04);
                 self.background_color.red = clamp(self.background_color.red - 0.04);
@@ -307,6 +319,51 @@ impl Program for Game {
     }
 }
 
+struct Audio {
+    current_time: f64,
+    end_time: f64
+}
+
+impl Audio {
+    fn new() -> Audio {
+        Audio{current_time: 0.0, end_time: 0.0}
+    }
+
+    fn beep(&mut self, duration: f64){
+        self.end_time = self.current_time + duration;
+    }
+}
+
+impl Synthesizer for Audio {
+    // variable length contiguous slice &[]
+    // samples size is number of samples played
+    // samples_played as f64 / SAMPLES_PER_SECOND as f64 -> seconds passed
+
+    fn synthesize(&mut self, samples_played: u64, samples: &mut [Sample]) {
+        // write a value to every every sample in the sample buffer
+
+        let mut t = samples_played as f64 / SAMPLES_PER_SECOND as f64;
+
+        for s in samples {
+            // left and right speakers
+            let frequency = 440.0; // hz, i.e. samples per second
+            let radians = t * frequency * 2.0 * PI;
+            let volume = 0.5;
+            if t < self.end_time {
+                let amplitude_of_waveform = (radians * frequency).sin() as f32 * volume; // -1 to 1
+                s.left = amplitude_of_waveform;
+                s.right = amplitude_of_waveform;
+            } else {
+                s.left = 0.0;
+                s.right = 0.0;
+            }
+
+            t += 1.0 / SAMPLES_PER_SECOND as f64;
+
+        }
+        self.current_time = t;
+    }
+}
 
 fn main() {
     run::<Game>();
