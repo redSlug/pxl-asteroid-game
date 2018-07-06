@@ -119,6 +119,7 @@ impl Game {
     }
 }
 
+
 impl Program for Game {
     fn synthesizer(&self) -> Option<Arc<Mutex<Synthesizer>>> {
         Some(self.audio.clone())
@@ -155,6 +156,7 @@ impl Program for Game {
     }
     fn tick(&mut self, events: &[Event]) {
         if self.lives == 0 {
+            self.audio.lock().unwrap().play(0.5, 0.2, VoiceKind::Noise);
             self.game_title = format!("Game over! Score:{} ", (self.game_timer / 60).to_string());
             return
         }
@@ -197,7 +199,7 @@ impl Program for Game {
             }
             if mushroom.shape.collides(&self.player) {
                 self.lives += 1;
-                self.audio.lock().unwrap().beep(0.5);
+                self.audio.lock().unwrap().play(0.3, 0.4, VoiceKind::Sin);
                 mushroom.shape.is_alive = false;
             }
         }
@@ -212,6 +214,8 @@ impl Program for Game {
                 for asteroid in self.asteroids.iter_mut() {
                     asteroid.is_alive = false;
                 }
+                self.audio.lock().unwrap().play(0.4, 0.2, VoiceKind::Noise);
+                self.audio.lock().unwrap().play(0.25, 0.4, VoiceKind::Square);
                 crystal.shape.is_alive = false;
             }
         }
@@ -229,7 +233,10 @@ impl Program for Game {
 
             // background gets darker with each colission
             if asteroid.collides(&self.player) {
-                self.audio.lock().unwrap().beep(0.1);
+                self.audio.lock().unwrap().play(0.1, 0.01, VoiceKind::Square);
+                self.audio.lock().unwrap().play(0.1, 0.4, VoiceKind::Sin);
+
+
                 self.collisions_count += 1;
                 self.background_color.green = clamp(self.background_color.green - 0.04);
                 self.background_color.red = clamp(self.background_color.red - 0.04);
@@ -280,7 +287,7 @@ impl Program for Game {
             })
         }
 
-        // clean out asteroids
+        // clean up
         self.asteroids.retain(|asteroid|asteroid.position.y < 255 && asteroid.is_alive);
         self.mushrooms.retain(|mushroom|mushroom.shape.position.y < 255 && mushroom.shape.is_alive);
         self.crystals.retain(|crystal|crystal.shape.position.y < 255 && crystal.shape.is_alive);
@@ -292,24 +299,20 @@ impl Program for Game {
             *p = self.background_color;
         }
 
-        // player
         self.player.draw(pixels);
 
-        // asteroids
         for asteroid in &self.asteroids {
             if asteroid.is_alive {
                 asteroid.draw(pixels);
             }
         }
 
-        // mushroom
         for mushroom in &self.mushrooms {
             if mushroom.shape.is_alive {
                 mushroom.shape.draw(pixels);
             }
         }
 
-        // mushroom
         for crystal in &self.crystals {
             if crystal.shape.is_alive {
                 crystal.shape.draw(pixels);
@@ -325,80 +328,74 @@ struct Voice {
     end_time: f64,
 }
 
+fn sine_wave(time: f64, volume: f32, frequency: f64) -> f32 {
+    let radians = time * frequency * 2.0 * PI;
+    (radians * frequency).sin() as f32 * volume
+}
+
+fn square_wave(time: f64, volume: f32, frequency: f64) -> f32 {
+    if sine_wave(time, volume, frequency) < 0.0 {
+        -1.0
+    } else {
+        1.0
+    }
+}
+
 impl Voice {
-    fn sample(&mut, time: f64) -> Sample {
-        unimplemented!();
+    fn sample(&self, time: f64) -> Sample {
+        if time < self.end_time {
+            let volume= self.volume;
+            let frequency = 100.0;
+            let amplitude_of_waveform= match self.kind {
+                VoiceKind::Sin => sine_wave(time, volume, frequency),
+                VoiceKind::Noise => rand::thread_rng().gen_range(-0.05, 0.05),
+                VoiceKind::Square => square_wave(time, volume, frequency),
+            };
+
+            return Sample{left: amplitude_of_waveform, right: amplitude_of_waveform};
+        } else {
+            return Sample{left: 0.0, right: 0.0};
+        }
     }
 }
 
 enum VoiceKind {
-    Sin, // sine wave // like original NES synth, fixed body of 6 voices
-    Square, // square wave
-    Sawtooth, // sawtooth wave
-    Noise, // white noise (random values between -1 and 1)
+    Sin,
+    Square,
+    Noise,
 }
 
 struct Audio {
     current_time: f64,
-    end_time: f64,
     voices: Vec<Voice>,
 }
 
 impl Audio {
     fn new() -> Audio {
-        Audio{current_time: 0.0, end_time: 0.0, voices: Vec::new()}
+        Audio{current_time: 0.0, voices: Vec::new()}
     }
 
-    // in game:
-    // audio.lock().unwrap().play(0.5, 0.25, VoiceKind::Sin);
-
-    fn play(&mut self, duration: f64, volume: f64, kind: VoiceKind) {
-        self.voices.push(Voice{volume, kind, end_time: self.curent_time + duration});
-    }
-
-    fn beep(&mut self, duration: f64){
-        self.end_time = self.current_time + duration;
+    fn play(&mut self, duration: f64, volume: f32, kind: VoiceKind) {
+        self.voices.push(Voice{volume, kind, end_time: self.current_time + duration});
     }
 }
 
 impl Synthesizer for Audio {
-    // variable length contiguous slice &[]
-    // samples size is number of samples played
-    // samples_played as f64 / SAMPLES_PER_SECOND as f64 -> seconds passed
-
     fn synthesize(&mut self, samples_played: u64, samples: &mut [Sample]) {
-
-
-        // Polyphonic synthesizer
-
-        // go over voices, find the active voices that are still playing (t < voice.end_time)
-        // for all active voices, add the voice's sample to the output sample
-
-        // write a value to every every sample in the sample buffer
-
-        let mut t = samples_played as f64 / SAMPLES_PER_SECOND as f64;
-
+        let mut time = samples_played as f64 / SAMPLES_PER_SECOND as f64;
         for s in samples {
-            // left and right speakers
-            let frequency = 440.0; // hz, i.e. samples per second
-            let radians = t * frequency * 2.0 * PI;
-            let volume = 0.5;
-            if t < self.end_time {
-                let amplitude_of_waveform = (radians * frequency).sin() as f32 * volume; // -1 to 1
-                s.left = amplitude_of_waveform; // becomes a big number if there are many voices
-                s.right = amplitude_of_waveform;
-            } else {
-                s.left = 0.0;
-                s.right = 0.0;
+            // Polyphonic synthesizer
+            for voice in self.voices.iter() {
+                if time < voice.end_time {
+                    s.left += voice.sample(time).left;
+                    s.right += voice.sample(time).right;
+                }
             }
-
-            t += 1.0 / SAMPLES_PER_SECOND as f64;
-
+            time += 1.0 / SAMPLES_PER_SECOND as f64;
         }
 
-        // remove all voices that are done playing, i.e t >= voice.end_time using retain
-
-        self.current_time = t;
+        self.current_time = time;
+        self.voices.retain(|voice|voice.end_time < time);
     }
 }
 
