@@ -10,7 +10,7 @@ use rand::prelude::*;
 
 
 const TARGET_ASTEROID_COUNT: u32 = 8;
-const SCREEN_SIZE: usize = 256;
+const SCREEN_SIZE: usize = 512;
 
 fn clamp(n: f32) -> f32 {
     if n < 0.0 {
@@ -103,6 +103,7 @@ struct Game {
     lives: u8,
     player: Shape,
     rest_until: Option<u32>,
+    game_over: bool,
     buttons_state: HashMap<Button, ButtonState>,
     // TODO maybe combine these two into one vector
     asteroids: Vec<Shape>,
@@ -133,7 +134,8 @@ impl Program for Game {
         Game {
             background_color: Pixel{alpha: 1.0, red: 1.0, green: 1.0, blue: 1.0},
             game_timer: 0,
-            lives: 8,
+            lives: 3,
+            game_over: false,
             game_title: String::new(),
             player: Shape{
                 position: Coordinate{x: 127, y: (SCREEN_SIZE - 5) as u8},
@@ -155,9 +157,18 @@ impl Program for Game {
         &self.game_title.as_str()
     }
     fn tick(&mut self, events: &[Event]) {
-        if self.lives == 0 {
-            self.audio.lock().unwrap().play(0.5, 0.2, VoiceKind::Noise);
-            self.game_title = format!("Game over! Score:{} ", (self.game_timer / 60).to_string());
+        if self.lives <= 0 {
+
+            if !self.game_over {
+                println!("made it here!");
+                self.audio.lock().unwrap().play(3.5, 0.2, VoiceKind::Noise);
+                self.audio.lock().unwrap().play(3.4, 0.01, VoiceKind::Square);
+                self.audio.lock().unwrap().play(3.5, 0.4, VoiceKind::Sin);
+                self.audio.lock().unwrap().play(3.1, 0.2, VoiceKind::Noise);
+                self.game_title = format!("Game over! Score:{} ", (self.game_timer / 60).to_string());
+            }
+
+            self.game_over = true;
             return
         }
         self.game_title = format!("Asteroids! Score:{} Lives:{}", (self.game_timer / 60).to_string(), self.lives);
@@ -199,7 +210,7 @@ impl Program for Game {
             }
             if mushroom.shape.collides(&self.player) {
                 self.lives += 1;
-                self.audio.lock().unwrap().play(0.3, 0.4, VoiceKind::Sin);
+                self.audio.lock().unwrap().play(0.5, 0.4, VoiceKind::Sin);
                 mushroom.shape.is_alive = false;
             }
         }
@@ -214,8 +225,8 @@ impl Program for Game {
                 for asteroid in self.asteroids.iter_mut() {
                     asteroid.is_alive = false;
                 }
-                self.audio.lock().unwrap().play(0.4, 0.2, VoiceKind::Noise);
-                self.audio.lock().unwrap().play(0.25, 0.4, VoiceKind::Square);
+                self.audio.lock().unwrap().play(2.3, 0.2, VoiceKind::Noise);
+                self.audio.lock().unwrap().play(2.5, 0.4, VoiceKind::Square);
                 crystal.shape.is_alive = false;
             }
         }
@@ -233,8 +244,8 @@ impl Program for Game {
 
             // background gets darker with each colission
             if asteroid.collides(&self.player) {
-                self.audio.lock().unwrap().play(0.1, 0.01, VoiceKind::Square);
-                self.audio.lock().unwrap().play(0.1, 0.4, VoiceKind::Sin);
+                self.audio.lock().unwrap().play(0.1, 0.2, VoiceKind::Noise);
+
 
 
                 self.collisions_count += 1;
@@ -247,7 +258,6 @@ impl Program for Game {
 
                 // subtract life
                 self.lives = self.lives.saturating_sub(1);
-                // TODO if lives as zero do something
             }
         }
 
@@ -335,9 +345,9 @@ fn sine_wave(time: f64, volume: f32, frequency: f64) -> f32 {
 
 fn square_wave(time: f64, volume: f32, frequency: f64) -> f32 {
     if sine_wave(time, volume, frequency) < 0.0 {
-        -1.0
+        -0.5
     } else {
-        1.0
+        0.5
     }
 }
 
@@ -348,7 +358,7 @@ impl Voice {
             let frequency = 100.0;
             let amplitude_of_waveform= match self.kind {
                 VoiceKind::Sin => sine_wave(time, volume, frequency),
-                VoiceKind::Noise => rand::thread_rng().gen_range(-0.05, 0.05),
+                VoiceKind::Noise => rand::thread_rng().gen_range(-0.55, 0.55),
                 VoiceKind::Square => square_wave(time, volume, frequency),
             };
 
