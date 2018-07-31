@@ -120,7 +120,6 @@ impl Game {
     }
 }
 
-
 impl Program for Game {
     fn synthesizer(&self) -> Option<Arc<Mutex<Synthesizer>>> {
         Some(self.audio.clone())
@@ -244,7 +243,7 @@ impl Program for Game {
 
             // background gets darker with each colission
             if asteroid.collides(&self.player) {
-                self.audio.lock().unwrap().play(0.1, 0.2, VoiceKind::Noise);
+                self.audio.lock().unwrap().play(1.1, 0.2, VoiceKind::Noise);
 
 
 
@@ -358,7 +357,7 @@ impl Voice {
             let frequency = 100.0;
             let amplitude_of_waveform= match self.kind {
                 VoiceKind::Sin => sine_wave(time, volume, frequency),
-                VoiceKind::Noise => rand::thread_rng().gen_range(-0.55, 0.55),
+                VoiceKind::Noise => rand::thread_rng().gen_range(-1.0, 0.0),
                 VoiceKind::Square => square_wave(time, volume, frequency),
             };
 
@@ -393,13 +392,25 @@ impl Audio {
 impl Synthesizer for Audio {
     fn synthesize(&mut self, samples_played: u64, samples: &mut [Sample]) {
         let mut time = samples_played as f64 / SAMPLES_PER_SECOND as f64;
+        println!("printing non-zero samples");
         for s in samples {
             // Polyphonic synthesizer
             for voice in self.voices.iter() {
-                if time < voice.end_time {
+                if voice.end_time > time {
                     s.left += voice.sample(time).left;
+                    if s.left > 1.0 {
+                        s.left = 1.0
+                    }
+
+                    if s.left < -1.0 {
+                        s.left = -1.0
+                    }
+
                     s.right += voice.sample(time).right;
                 }
+            }
+            if s.left != 0.0 {
+                println!("left={}", s.left);
             }
             time += 1.0 / SAMPLES_PER_SECOND as f64;
         }
